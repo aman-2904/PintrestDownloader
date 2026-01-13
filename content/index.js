@@ -146,10 +146,29 @@ class PinValidator {
         return false;
     }
     static getPinId(node) {
+        // Strategy 1: If we are on a single pin page, trust the URL
+        const path = window.location.pathname;
+        const pathMatch = path.match(/^\/pin\/(\d+)\//);
+        if (pathMatch) {
+            return pathMatch[1];
+        }
+
+        // Strategy 2: Scoped search within the specific node
+        // Exclude grid items or related pins if we are looking at a specific container
         const link = node.querySelector('a[href^="/pin/"]');
         if (link) {
+            // Verify this link isn't digging into a "related pin" or "more like this"
+            // If the link is too deep or inside another widget, it might be wrong.
+            // For now, let's just parse it.
             const parts = link.getAttribute('href').split('/');
-            return parts[2];
+            // Expected: /pin/12345/ or /pin/12345
+            if (parts[1] === 'pin' && /^\d+$/.test(parts[2])) {
+                return parts[2];
+            }
+            // Fallback for some URLs like /pin/ID/sent/
+            if (parts[1] === 'pin' && parts[2]) {
+                return parts[2];
+            }
         }
         return null;
     }
@@ -209,7 +228,9 @@ class ViewportManager {
     handleIntersection(entries) {
         entries.forEach(entry => {
             if (entry.isIntersecting) {
-                this.visiblePins.set(entry.target, entry.intersectionRatio);
+                // Calculate visible area (width * height)
+                const visibleArea = entry.intersectionRect.width * entry.intersectionRect.height;
+                this.visiblePins.set(entry.target, visibleArea);
             } else {
                 this.visiblePins.delete(entry.target);
             }
@@ -217,11 +238,11 @@ class ViewportManager {
         this.determineActivePin();
     }
     determineActivePin() {
-        let maxRatio = 0;
+        let maxArea = 0;
         let activePin = null;
-        for (const [node, ratio] of this.visiblePins.entries()) {
-            if (ratio > maxRatio) {
-                maxRatio = ratio;
+        for (const [node, area] of this.visiblePins.entries()) {
+            if (area > maxArea) {
+                maxArea = area;
                 activePin = node;
             }
         }
